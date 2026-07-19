@@ -1,0 +1,743 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>a game for you</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #030b06;
+    --panel: #06170d;
+    --line: #123320;
+    --phosphor: #3dff88;
+    --phosphor-dim: #1f9e57;
+    --phosphor-faint: #0f5a30;
+    --amber: #ffb020;
+    --danger: #ff5050;
+    --gold: #f5d76e;
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; height:100%; background:var(--bg); color:var(--phosphor);
+    font-family:'VT323', monospace; overflow:hidden;
+  }
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:50;
+    background: repeating-linear-gradient(
+      to bottom, rgba(0,0,0,0) 0px, rgba(0,0,0,0) 2px,
+      rgba(0,0,0,0.18) 3px, rgba(0,0,0,0) 4px
+    );
+    mix-blend-mode:multiply;
+  }
+  body::after{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:51;
+    box-shadow: inset 0 0 140px rgba(0,0,0,0.85), inset 0 0 40px rgba(0,0,0,0.6);
+  }
+  .crt-flicker{ animation: flicker 6s infinite; }
+  @keyframes flicker{
+    0%,100%{ opacity:1; } 92%{ opacity:1; } 93%{ opacity:0.94; } 94%{ opacity:1; }
+  }
+
+  /* ---------- Boot / connect screen ---------- */
+  #boot{
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+    flex-direction:column; z-index:10; text-align:center; padding:20px;
+  }
+  #boot h1{
+    font-family:'Press Start 2P', monospace; font-size: clamp(22px, 5vw, 42px);
+    color:var(--phosphor); text-shadow: 0 0 10px var(--phosphor-dim), 0 0 22px var(--phosphor-faint);
+    letter-spacing:4px; margin:0 0 6px 0;
+  }
+  #boot .tag{ color:var(--phosphor-dim); font-size:20px; margin-bottom:28px; letter-spacing:2px;}
+  .panel{
+    background:var(--panel); border:2px solid var(--line); border-radius:4px;
+    padding:22px 26px; max-width:480px; width:100%;
+    box-shadow:0 0 30px rgba(61,255,136,0.08), inset 0 0 20px rgba(0,0,0,0.4);
+  }
+  .panel label{ display:block; text-align:left; font-size:18px; color:var(--phosphor-dim); margin-bottom:6px;}
+  .row{ display:flex; gap:8px; margin-bottom:14px; }
+  input[type=text]{
+    flex:1; background:#02140a; border:2px solid var(--phosphor-faint); color:var(--phosphor);
+    font-family:'VT323', monospace; font-size:19px; padding:8px 10px; border-radius:2px; outline:none;
+  }
+  input[type=text]:focus{ border-color:var(--phosphor); }
+  button{
+    font-family:'VT323', monospace; font-size:19px; letter-spacing:1px; cursor:pointer;
+    background:var(--phosphor-faint); color:#02140a; border:2px solid var(--phosphor-dim);
+    padding:8px 16px; border-radius:2px; font-weight:bold;
+  }
+  button:hover{ background:var(--phosphor); }
+  button:disabled{ opacity:0.5; cursor:default; }
+  #status{ min-height:22px; font-size:17px; color:var(--amber); margin-top:4px;}
+  .howto{ text-align:left; font-size:17px; color:var(--phosphor-dim); margin-top:16px; line-height:1.5; border-top:1px dashed var(--line); padding-top:14px;}
+  .howto b{ color:var(--phosphor); }
+  .hidden{ display:none !important; }
+
+  /* ---------- Game screen ---------- */
+  #game{ position:fixed; inset:0; display:flex; z-index:5; }
+  #stage{ flex:1; position:relative; display:flex; align-items:center; justify-content:center; background:#010704; }
+  #stage canvas{ image-rendering:pixelated; border:3px solid var(--line); box-shadow:0 0 40px rgba(61,255,136,0.06); max-width:96%; max-height:96%; width:auto; height:auto; }
+  #roomLabel{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    font-size:24px; letter-spacing:2px; color:var(--phosphor); text-shadow:0 0 10px var(--phosphor-dim);
+    background:rgba(2,10,6,0.6); padding:2px 16px; border:1px solid var(--line); border-radius:3px;
+    pointer-events:none;
+  }
+  #sidebar{
+    width:280px; min-width:230px; background:var(--panel); border-left:2px solid var(--line);
+    padding:16px; display:flex; flex-direction:column; gap:16px; overflow-y:auto;
+  }
+  .box{ border:1px solid var(--line); border-radius:3px; padding:10px 12px; background:rgba(0,0,0,0.2); }
+  .box h3{ margin:0 0 8px 0; font-size:18px; letter-spacing:2px; color:var(--phosphor-dim); font-weight:normal; text-transform:uppercase; }
+  #inventory{ display:flex; align-items:center; gap:10px; font-size:20px; min-height:34px; }
+  #invSwatch{ width:26px; height:26px; border:2px solid #000; border-radius:3px; background:#111; flex-shrink:0; }
+  #gates{ display:flex; gap:10px; font-size:16px; }
+  .gate{ display:flex; flex-direction:column; align-items:center; gap:4px; opacity:0.5; }
+  .gate.on{ opacity:1; }
+  .gate .dot{ width:14px; height:14px; border-radius:50%; border:2px solid #000; }
+  #minimapCanvas{ width:100%; height:150px; display:block; background:#010704; border:1px solid var(--line); }
+  #log{ font-size:17px; line-height:1.4; color:var(--phosphor-dim); max-height:110px; overflow-y:auto; }
+  #log div{ margin-bottom:4px; }
+  #log div.fresh{ color:var(--phosphor); }
+  .keys{ font-size:16px; color:var(--phosphor-dim); line-height:1.5; }
+  .keys b{ color:var(--phosphor); }
+
+  #overlay{
+    position:fixed; inset:0; z-index:40; display:none; align-items:center; justify-content:center;
+    background:rgba(1,5,3,0.88); flex-direction:column; text-align:center; gap:18px;
+  }
+  #overlay h2{ font-family:'Press Start 2P', monospace; font-size:clamp(20px,4vw,34px); letter-spacing:3px; }
+  #overlay.win h2{ color:var(--gold); text-shadow:0 0 20px var(--gold); }
+  #overlay.lose h2{ color:var(--danger); text-shadow:0 0 20px var(--danger); }
+  #overlay p{ color:var(--phosphor-dim); font-size:20px; max-width:480px; }
+
+  #errorBanner{
+    display:none; position:fixed; left:10px; bottom:10px; z-index:60;
+    max-width:min(90vw, 640px); background:#2a0000; color:#ff8080;
+    border:2px solid #ff4040; border-radius:4px; padding:10px 14px;
+    font-family:'VT323', monospace; font-size:16px; line-height:1.4;
+    white-space:pre-wrap; word-break:break-word;
+  }
+
+  @media (max-width: 720px){
+    #sidebar{ width:210px; min-width:170px; padding:10px; gap:10px; }
+    #roomLabel{ font-size:18px; }
+  }
+</style>
+</head>
+<body class="crt-flicker">
+
+  <div id="boot">
+    <h1>A GAME FOR YOU</h1>
+    <div class="tag">explore, survive, and find what's hidden</div>
+    <div class="panel">
+      <label for="wsUrl">GAME SERVER ADDRESS</label>
+      <div class="row">
+        <input type="text" id="wsUrl" placeholder="wss://your-app.up.railway.app" />
+        <button id="connectBtn">CONNECT</button>
+      </div>
+      <div id="status"></div>
+      <div class="howto">
+        <div><b>Move:</b> Arrow keys or WASD</div>
+        <div><b>Pick up / put down:</b> Space bar</div>
+        <div>Find the <b>sword</b> to survive dragons — touch one while armed to slay it, or it will eat you. Find the three colored <b>keys</b> to unlock their matching castle gates. A <b>bat</b> roams the land and may steal whatever you're carrying. You can carry only one thing at a time. Recover the <b>chalice</b> from the Black Castle and bring it home to the Yellow Castle to win.</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="game" class="hidden">
+    <div id="stage">
+      <div id="roomLabel">—</div>
+      <canvas id="viewport" width="800" height="500"></canvas>
+    </div>
+    <div id="sidebar">
+      <div class="box">
+        <h3>Carrying</h3>
+        <div id="inventory"><div id="invSwatch"></div><span id="invLabel">empty hands</span></div>
+      </div>
+      <div class="box">
+        <h3>Gates</h3>
+        <div id="gates">
+          <div class="gate" id="gateYellow"><div class="dot" style="background:#e8c93a"></div>Yellow</div>
+          <div class="gate" id="gateWhite"><div class="dot" style="background:#d8d0c0"></div>Copper</div>
+          <div class="gate" id="gateBlack"><div class="dot" style="background:#2a2a2a"></div>Black</div>
+        </div>
+      </div>
+      <div class="box">
+        <h3>Map</h3>
+        <canvas id="minimapCanvas" width="260" height="150"></canvas>
+      </div>
+      <div class="box">
+        <h3>Log</h3>
+        <div id="log"></div>
+      </div>
+      <div class="box keys">
+        <div><b>Move:</b> Arrows / WASD</div>
+        <div><b>Pick up / drop:</b> Space</div>
+        <div><b>Restart world:</b> R</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <h2 id="overlayTitle">—</h2>
+    <p id="overlayText"></p>
+    <button id="overlayBtn">RESTART</button>
+  </div>
+
+  <div id="errorBanner"></div>
+
+<script>
+(() => {
+  "use strict";
+
+  window.addEventListener('error', (e) => {
+    const el = document.getElementById('errorBanner');
+    if (!el) return;
+    el.style.display = 'block';
+    el.textContent = 'Page error (screenshot this): ' + e.message + '\nat ' + e.filename + ':' + e.lineno;
+  });
+
+  // ---------------- Connection setup ----------------
+  const bootEl = document.getElementById('boot');
+  const gameEl = document.getElementById('game');
+  const statusEl = document.getElementById('status');
+  const urlInput = document.getElementById('wsUrl');
+  const connectBtn = document.getElementById('connectBtn');
+
+  const isFileProtocol = location.protocol === 'file:';
+  function defaultWsUrl(){
+    if (isFileProtocol) return '';
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    return `${proto}://${location.host}`;
+  }
+  urlInput.value = defaultWsUrl();
+
+  let ws = null;
+  let roomsMeta = null, roomSize = { w: 800, h: 500 }, startRoom = 'r0', winRoom = 'r14';
+  let minimapPos = null;
+  let latest = null; // last state payload
+  let connected = false;
+
+  function setStatus(msg, isError){
+    statusEl.textContent = msg || '';
+    statusEl.style.color = isError ? 'var(--danger)' : 'var(--amber)';
+  }
+
+  function connect(url){
+    if (!url){ setStatus('Enter a server address first.', true); return; }
+    setStatus('Connecting to ' + url + ' ...');
+    connectBtn.disabled = true;
+    try{
+      ws = new WebSocket(url);
+    }catch(e){
+      setStatus('Invalid address: ' + e.message, true);
+      connectBtn.disabled = false;
+      return;
+    }
+    ws.onopen = () => setStatus('Connected. Waiting for world...');
+    ws.onmessage = (ev) => {
+      let msg;
+      try{ msg = JSON.parse(ev.data); }catch{ return; }
+      if (msg.type === 'init'){
+        roomsMeta = msg.rooms; roomSize = msg.roomSize; startRoom = msg.startRoom; winRoom = msg.winRoom;
+        minimapPos = computeLayout(roomsMeta);
+        connected = true;
+        bootEl.classList.add('hidden');
+        gameEl.classList.remove('hidden');
+        connectBtn.disabled = false;
+      } else if (msg.type === 'state'){
+        latest = msg.payload;
+        renderAll();
+      } else if (msg.type === 'reveal'){
+        roomsMeta[msg.room] = msg.meta;
+        roomsMeta[msg.patch.room] = { ...roomsMeta[msg.patch.room], exits: msg.patch.exits };
+        minimapPos = computeLayout(roomsMeta);
+        pushLog('Something shifts, somewhere far off...');
+      }
+    };
+    ws.onerror = () => { setStatus('Connection error. Check the address and try again.', true); connectBtn.disabled = false; };
+    ws.onclose = () => {
+      if (connected){
+        setStatus('Disconnected from server.', true);
+        gameEl.classList.add('hidden');
+        bootEl.classList.remove('hidden');
+        connected = false;
+      } else {
+        setStatus('Could not connect. Check the address and try again.', true);
+      }
+      connectBtn.disabled = false;
+    };
+  }
+
+  connectBtn.addEventListener('click', () => connect(urlInput.value.trim()));
+  urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') connect(urlInput.value.trim()); });
+  if (!isFileProtocol) connect(urlInput.value);
+
+  // ---------------- Force-directed minimap layout ----------------
+  function computeLayout(rooms){
+    const ids = Object.keys(rooms);
+    const pos = {};
+    ids.forEach((id, i) => {
+      const a = (i / ids.length) * Math.PI * 2;
+      pos[id] = { x: Math.cos(a) * 100, y: Math.sin(a) * 100 };
+    });
+    const edges = [];
+    ids.forEach(id => Object.values(rooms[id].exits).forEach(e => edges.push([id, e.to])));
+    for (let iter = 0; iter < 250; iter++){
+      for (let i = 0; i < ids.length; i++){
+        for (let j = i + 1; j < ids.length; j++){
+          const a = pos[ids[i]], b = pos[ids[j]];
+          let dx = a.x - b.x, dy = a.y - b.y;
+          let d = Math.hypot(dx, dy) || 0.01;
+          const force = 700 / (d * d);
+          dx /= d; dy /= d;
+          a.x += dx * force; a.y += dy * force;
+          b.x -= dx * force; b.y -= dy * force;
+        }
+      }
+      edges.forEach(([u, v]) => {
+        const a = pos[u], b = pos[v];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy) || 0.01;
+        const force = d * 0.02;
+        dx /= d; dy /= d;
+        a.x += dx * force; a.y += dy * force;
+        b.x -= dx * force; b.y -= dy * force;
+      });
+      let cx = 0, cy = 0;
+      ids.forEach(id => { cx += pos[id].x; cy += pos[id].y; });
+      cx /= ids.length; cy /= ids.length;
+      ids.forEach(id => { pos[id].x -= cx * 0.02; pos[id].y -= cy * 0.02; });
+    }
+    return pos;
+  }
+
+  // ---------------- Input handling ----------------
+  const keyState = { up:false, down:false, left:false, right:false };
+  function keyToDir(k){
+    switch(k){
+      case 'ArrowUp': case 'w': case 'W': return 'up';
+      case 'ArrowDown': case 's': case 'S': return 'down';
+      case 'ArrowLeft': case 'a': case 'A': return 'left';
+      case 'ArrowRight': case 'd': case 'D': return 'right';
+    }
+    return null;
+  }
+  window.addEventListener('keydown', (e) => {
+    if (!connected) return;
+    const dir = keyToDir(e.key);
+    if (dir){ keyState[dir] = true; e.preventDefault(); return; }
+    if (e.key === ' '){
+      if (!e.repeat && ws && ws.readyState === WebSocket.OPEN){
+        ws.send(JSON.stringify({ type: 'action', action: 'toggleCarry' }));
+      }
+      e.preventDefault();
+    }
+    if (e.key === 'r' || e.key === 'R'){
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'reset' }));
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    const dir = keyToDir(e.key);
+    if (dir){ keyState[dir] = false; e.preventDefault(); }
+  });
+  setInterval(() => {
+    if (connected && ws && ws.readyState === WebSocket.OPEN){
+      ws.send(JSON.stringify({ type: 'input', keys: keyState }));
+    }
+  }, 50);
+
+  document.getElementById('overlayBtn').addEventListener('click', () => {
+    if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'reset' }));
+  });
+
+  // ---------------- Rendering ----------------
+  const canvas = document.getElementById('viewport');
+  const ctx = canvas.getContext('2d');
+  const roomLabel = document.getElementById('roomLabel');
+  const invSwatch = document.getElementById('invSwatch');
+  const invLabel = document.getElementById('invLabel');
+  const logEl = document.getElementById('log');
+  const overlayEl = document.getElementById('overlay');
+  const overlayTitle = document.getElementById('overlayTitle');
+  const overlayText = document.getElementById('overlayText');
+  const minimapCanvas = document.getElementById('minimapCanvas');
+  const mctx = minimapCanvas.getContext('2d');
+
+  const ITEM_STYLES = {
+    sword:    { bg:'#e6e6e6', fg:'#1a1a1a', label:'SW' },
+    bridge:   { bg:'#b06a2b', fg:'#fff2df', label:'BR' },
+    yellowKey:{ bg:'#ffd83a', fg:'#3a2a00', label:'Y' },
+    whiteKey: { bg:'#f2ead8', fg:'#3a2a00', label:'C' },
+    blackKey: { bg:'#232323', fg:'#ffd83a', label:'B' },
+    chalice:  { bg:'#ffcf40', fg:'#5a3d00', label:'CH' },
+    dot:      { bg:'#6b1f8c', fg:'#6b1f8c', label:'' },
+  };
+  const DRAGON_COLORS = { yellow:'#ffd83a', green:'#3fd66a', black:'#7a7aff' };
+
+  function hashRoom(id){
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return h;
+  }
+  const ROOM_PALETTE = ['#2f7d32', '#1f5fa8', '#a8461f', '#6b1f8c', '#1f8c7a', '#8c6b1f', '#1f3a8c', '#8c1f4f'];
+  const ACCENT_PALETTE = ['#c9ff5a', '#7fe3ff', '#ffcf5a', '#ff8ad1', '#5affc9', '#ffe35a', '#8ab4ff', '#ff9a5a'];
+
+  function biomeColor(id, name){
+    if (id === 'r_egg') return '#2a1740';
+    if (/Castle/.test(name)) return '#241a3a';
+    if (/Dragon/.test(name)) return '#7a2020';
+    if (/Marsh|River/.test(name)) return '#1f5a52';
+    return ROOM_PALETTE[hashRoom(id) % ROOM_PALETTE.length];
+  }
+  function accentColor(name, id){
+    if (id === 'r_egg') return '#ff8ad1';
+    if (/Yellow/.test(name)) return '#ffd83a';
+    if (/Copper|White/.test(name)) return '#f2ead8';
+    if (/Black/.test(name)) return '#8ab4ff';
+    return ACCENT_PALETTE[hashRoom(id) % ACCENT_PALETTE.length];
+  }
+
+  function drawRoom(roomId){
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // always start each frame from a clean slate
+    const room = roomsMeta[roomId];
+    const bg = biomeColor(roomId, room.name);
+    const accent = accentColor(room.name, roomId);
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const W = canvas.width, H = canvas.height, EDGE = 10;
+    const gapLen = 130;
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = accent;
+
+    function lockColor(dir){
+      const exit = room.exits[dir];
+      if (!exit) return null;
+      if (!exit.lock) return '#2c8a54';
+      return latest && latest.unlocks[exit.lock] ? '#f5d76e' : '#7a3030';
+    }
+    // North
+    ctx.beginPath(); ctx.moveTo(0, EDGE); ctx.lineTo(W, EDGE); ctx.stroke();
+    // South
+    ctx.beginPath(); ctx.moveTo(0, H-EDGE); ctx.lineTo(W, H-EDGE); ctx.stroke();
+    // West
+    ctx.beginPath(); ctx.moveTo(EDGE, 0); ctx.lineTo(EDGE, H); ctx.stroke();
+    // East
+    ctx.beginPath(); ctx.moveTo(W-EDGE, 0); ctx.lineTo(W-EDGE, H); ctx.stroke();
+
+    // gaps + indicators
+    const gaps = [
+      { dir:'N', x1: W/2-gapLen/2, y1:EDGE, x2: W/2+gapLen/2, y2:EDGE, cx:W/2, cy:EDGE },
+      { dir:'S', x1: W/2-gapLen/2, y1:H-EDGE, x2: W/2+gapLen/2, y2:H-EDGE, cx:W/2, cy:H-EDGE },
+      { dir:'W', x1: EDGE, y1:H/2-gapLen/2, x2: EDGE, y2:H/2+gapLen/2, cx:EDGE, cy:H/2 },
+      { dir:'E', x1: W-EDGE, y1:H/2-gapLen/2, x2: W-EDGE, y2:H/2+gapLen/2, cx:W-EDGE, cy:H/2 },
+    ];
+    gaps.forEach(g => {
+      const col = lockColor(g.dir);
+      if (!col) return;
+      ctx.strokeStyle = bg; ctx.lineWidth = 14;
+      ctx.beginPath(); ctx.moveTo(g.x1, g.y1); ctx.lineTo(g.x2, g.y2); ctx.stroke();
+      ctx.fillStyle = col;
+      ctx.beginPath(); ctx.arc(g.cx, g.cy, 9, 0, Math.PI*2); ctx.fill();
+      const exit = room.exits[g.dir];
+      if (exit.lock){
+        ctx.fillStyle = '#0a0a0a';
+        ctx.font = 'bold 12px VT323, monospace';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const letter = { yellowKey:'Y', whiteKey:'C', blackKey:'B', bridge:'BR' }[exit.lock];
+        ctx.fillText(letter, g.cx, g.cy + 1);
+      }
+    });
+  }
+
+  function drawItem(item){
+    ctx.save();
+    try {
+      ctx.translate(item.x, item.y);
+      if (item.type === 'dot'){
+        ctx.fillStyle = ITEM_STYLES.dot.bg;
+        ctx.fillRect(-2, -2, 4, 4);
+        return;
+      }
+      // soft backing chip so icons stay legible against any room color
+      ctx.fillStyle = 'rgba(0,0,0,0.32)';
+      ctx.beginPath(); ctx.arc(0, 3, 17, 0, Math.PI * 2); ctx.fill();
+
+      switch (item.type){
+        case 'sword': drawSwordIcon(); break;
+        case 'bridge': drawBridgeIcon(); break;
+        case 'yellowKey': drawKeyIcon('#ffd83a', '#3a2a00'); break;
+        case 'whiteKey': drawKeyIcon('#f2ead8', '#3a2a00'); break;
+        case 'blackKey': drawKeyIcon('#3a3a3a', '#ffd83a'); break;
+        case 'chalice': drawChaliceIcon(); break;
+        default:
+          ctx.fillStyle = '#999'; ctx.fillRect(-10, -10, 20, 20);
+      }
+    } finally {
+      ctx.restore();
+    }
+  }
+
+  function drawSwordIcon(){
+    // blade
+    ctx.fillStyle = '#e8e8e8';
+    ctx.beginPath();
+    ctx.moveTo(0, -19); ctx.lineTo(4, -7); ctx.lineTo(4, 7); ctx.lineTo(-4, 7); ctx.lineTo(-4, -7);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#9a9a9a'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.strokeStyle = '#bfbfbf'; ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(0, 6); ctx.stroke();
+    // crossguard
+    ctx.fillStyle = '#d4af37';
+    ctx.fillRect(-11, 6, 22, 4);
+    // hilt
+    ctx.fillStyle = '#5a3a1a';
+    ctx.fillRect(-3, 10, 6, 9);
+    // pommel
+    ctx.fillStyle = '#d4af37';
+    ctx.beginPath(); ctx.arc(0, 20, 3, 0, Math.PI * 2); ctx.fill();
+  }
+
+  function drawBridgeIcon(){
+    ctx.fillStyle = '#8a5a2b';
+    ctx.fillRect(-18, -3, 36, 8);
+    ctx.strokeStyle = '#5a3a1a'; ctx.lineWidth = 2;
+    for (let px = -14; px <= 14; px += 7){
+      ctx.beginPath(); ctx.moveTo(px, -3); ctx.lineTo(px, 5); ctx.stroke();
+    }
+    ctx.fillStyle = '#5a3a1a';
+    ctx.fillRect(-19, 5, 5, 11);
+    ctx.fillRect(14, 5, 5, 11);
+  }
+
+  function drawKeyIcon(color, dark){
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(0, -10, 6.5, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = dark;
+    ctx.beginPath(); ctx.arc(0, -10, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = color;
+    ctx.fillRect(-2.5, -4, 5, 20);
+    ctx.fillRect(2.5, 10, 6, 3.5);
+    ctx.fillRect(2.5, 15, 5, 3.5);
+  }
+
+  function drawChaliceIcon(){
+    ctx.fillStyle = '#ffcf40';
+    ctx.beginPath();
+    ctx.moveTo(-11, -17); ctx.lineTo(11, -17); ctx.lineTo(4, 1); ctx.lineTo(-4, 1);
+    ctx.closePath(); ctx.fill();
+    ctx.fillRect(-2, 1, 4, 10);
+    ctx.fillRect(-9, 11, 18, 4);
+    ctx.strokeStyle = '#a5780a'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(-11, -17); ctx.lineTo(11, -17); ctx.stroke();
+  }
+
+  function drawDragon(d){
+    ctx.save(); ctx.translate(d.x, d.y);
+    if (!d.alive){
+      ctx.strokeStyle = 'rgba(200,200,200,0.5)'; ctx.lineWidth = 5;
+      ctx.beginPath(); ctx.moveTo(-12,-12); ctx.lineTo(12,12); ctx.moveTo(12,-12); ctx.lineTo(-12,12); ctx.stroke();
+      ctx.restore(); return;
+    }
+    const color = DRAGON_COLORS[d.color] || '#fff';
+    ctx.fillStyle = color;
+    // blocky zigzag body -- stacked rectangles rather than a smooth curve
+    ctx.fillRect(-30, -5, 13, 11);
+    ctx.fillRect(-19, -11, 13, 11);
+    ctx.fillRect(-8, -5, 13, 11);
+    ctx.fillRect(3, -11, 13, 11);
+    // head block
+    ctx.fillRect(14, -9, 18, 18);
+    // mouth
+    ctx.fillStyle = '#b81f2a';
+    ctx.fillRect(30, 3, 8, 5);
+    // eye
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(22, -5, 5, 5);
+    ctx.restore();
+  }
+
+  function drawBat(b){
+    ctx.save(); ctx.translate(b.x, b.y);
+    ctx.fillStyle = '#161421';
+    ctx.fillRect(-20, -3, 12, 8);
+    ctx.fillRect(-7, -8, 14, 16);
+    ctx.fillRect(8, -3, 12, 8);
+    ctx.restore();
+  }
+
+  function drawPlayer(p){
+    const px = Number.isFinite(p.x) ? p.x : canvas.width / 2;
+    const py = Number.isFinite(p.y) ? p.y : canvas.height / 2;
+    ctx.save(); ctx.translate(px, py);
+    ctx.fillStyle = '#f2ead8';
+    ctx.fillRect(-13, -13, 26, 26);
+    ctx.strokeStyle = '#0a0a0a'; ctx.lineWidth = 3; ctx.strokeRect(-13, -13, 26, 26);
+    const off = { N:[0,-13], S:[0,13], E:[13,0], W:[-13,0] }[p.facing] || [0, 13];
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(off[0] - 4, off[1] - 4, 8, 8);
+    ctx.restore();
+  }
+
+  function drawCherry(x, y, scale){
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.fillStyle = '#5a3320';
+    ctx.fillRect(-1, -18, 2, 14);
+    ctx.fillRect(-1, -18, 10, 2);
+    ctx.fillStyle = '#2f7d3a';
+    ctx.beginPath(); ctx.ellipse(11, -19, 6, 3, -0.3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#d21f3c';
+    ctx.beginPath(); ctx.arc(-6, -2, 8, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(7, 2, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.35)';
+    ctx.beginPath(); ctx.arc(-9, -5, 2.4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(4, -1, 2.4, 0, Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+
+  const CHERRY_SPOTS = [ [140, 400, 1.1], [660, 120, 0.9], [610, 400, 1.0], [180, 130, 0.8] ];
+
+  function drawSecretRoom(){
+    CHERRY_SPOTS.forEach(([x, y, s]) => drawCherry(x, y, s));
+    if (!latest.secret || !latest.secret.lines) return;
+    const lines = latest.secret.lines;
+    const t = Date.now();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '32px VT323, monospace';
+    lines.forEach((line, li) => {
+      const y = canvas.height/2 - 20 + li * 40;
+      let x = canvas.width/2 - ctx.measureText(line).width/2;
+      for (const ch of line){
+        const w = ctx.measureText(ch).width;
+        const hue = (t / 12 + x * 2) % 360;
+        ctx.fillStyle = `hsl(${hue}, 85%, 68%)`;
+        ctx.fillText(ch, x + w/2, y);
+        x += w;
+      }
+    });
+  }
+
+  const logLines = [];
+  function pushLog(text){
+    logLines.push(text);
+    if (logLines.length > 6) logLines.shift();
+    logEl.innerHTML = logLines.map((t, i) => `<div class="${i === logLines.length-1 ? 'fresh' : ''}">${escapeHtml(t)}</div>`).join('');
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+  function escapeHtml(s){ return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+  let lastEventSeen = null;
+
+  function renderAll(){
+    if (!latest || !roomsMeta) return;
+    try {
+      renderAllInner();
+      hideRenderError();
+    } catch (err) {
+      showRenderError(err);
+    }
+  }
+
+  function showRenderError(err){
+    const el = document.getElementById('errorBanner');
+    el.style.display = 'block';
+    el.textContent = 'Render error (screenshot this): ' + (err && err.message ? err.message : String(err))
+      + '\nplayer: ' + JSON.stringify(latest && latest.player);
+  }
+  function hideRenderError(){
+    document.getElementById('errorBanner').style.display = 'none';
+  }
+
+  function renderAllInner(){
+    const room = roomsMeta[latest.player.room];
+    if (!room) return; // unknown room id this frame -- skip rather than throw
+    roomLabel.textContent = room.name.toUpperCase();
+    drawRoom(latest.player.room);
+
+    Object.values(latest.items).forEach(it => { if (it.room === latest.player.room) drawItem(it); });
+    Object.values(latest.dragons).forEach(d => { if (d.room === latest.player.room) drawDragon(d); });
+    if (latest.bat.room === latest.player.room) drawBat(latest.bat);
+    if (latest.player.room === 'r_egg') drawSecretRoom();
+    drawPlayer(latest.player);
+
+    // Inventory panel
+    if (latest.player.carrying){
+      const st = ITEM_STYLES[latest.player.carrying];
+      invSwatch.style.background = st.bg;
+      invLabel.textContent = labelFor(latest.player.carrying);
+    } else {
+      invSwatch.style.background = '#111';
+      invLabel.textContent = 'empty hands';
+    }
+
+    // Gates
+    setGate('gateYellow', latest.unlocks.yellowKey);
+    setGate('gateWhite', latest.unlocks.whiteKey);
+    setGate('gateBlack', latest.unlocks.blackKey);
+
+    // Log
+    if (latest.event && latest.event !== lastEventSeen){
+      pushLog(latest.event);
+      lastEventSeen = latest.event;
+    }
+
+    // Overlay
+    if (latest.won || latest.lost){
+      overlayEl.style.display = 'flex';
+      overlayEl.className = latest.won ? 'win' : 'lose';
+      overlayTitle.textContent = latest.won ? 'YOU WIN' : 'YOU WERE EATEN';
+      overlayText.textContent = latest.won
+        ? 'You carried the chalice safely home to the Yellow Castle.'
+        : 'A dragon caught you without your sword in hand. The realm resets.';
+    } else {
+      overlayEl.style.display = 'none';
+    }
+
+    drawMinimap();
+  }
+
+  function setGate(id, on){
+    document.getElementById(id).classList.toggle('on', !!on);
+  }
+  function labelFor(type){
+    return { sword:'sword', bridge:'bridge', yellowKey:'yellow key', whiteKey:'copper key', blackKey:'black key', chalice:'chalice', dot:'... something?' }[type] || type;
+  }
+
+  function drawMinimap(){
+    if (!minimapPos) return;
+    const W = minimapCanvas.width, H = minimapCanvas.height;
+    mctx.fillStyle = '#010704'; mctx.fillRect(0,0,W,H);
+    const xs = Object.values(minimapPos).map(p => p.x), ys = Object.values(minimapPos).map(p => p.y);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const pad = 18;
+    const sx = (x) => pad + (x - minX) / (maxX - minX || 1) * (W - pad*2);
+    const sy = (y) => pad + (y - minY) / (maxY - minY || 1) * (H - pad*2);
+
+    mctx.strokeStyle = 'rgba(61,255,136,0.25)'; mctx.lineWidth = 1;
+    Object.entries(roomsMeta).forEach(([id, room]) => {
+      Object.values(room.exits).forEach(e => {
+        const a = minimapPos[id], b = minimapPos[e.to];
+        mctx.beginPath(); mctx.moveTo(sx(a.x), sy(a.y)); mctx.lineTo(sx(b.x), sy(b.y)); mctx.stroke();
+      });
+    });
+    Object.keys(roomsMeta).forEach(id => {
+      const p = minimapPos[id];
+      const isCurrent = latest && latest.player.room === id;
+      mctx.beginPath();
+      mctx.arc(sx(p.x), sy(p.y), isCurrent ? 6 : 3.5, 0, Math.PI*2);
+      mctx.fillStyle = isCurrent ? '#3dff88' : 'rgba(61,255,136,0.45)';
+      mctx.fill();
+      if (isCurrent){
+        mctx.strokeStyle = '#3dff88'; mctx.lineWidth = 1.5; mctx.stroke();
+      }
+    });
+  }
+})();
+</script>
+</body>
+</html>
