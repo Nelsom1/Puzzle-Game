@@ -1,0 +1,16 @@
+{
+  "name": "game-server",
+  "version": "1.0.0",
+  "description": "A small top-down game server (dragons, keys, castles, a hidden secret) played over WebSockets. Deploy to Railway; connect from the bundled HTML client.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.17.0"
+  }
+}
